@@ -32,11 +32,11 @@ unsigned int T1_5; // inter character time out in microseconds
 unsigned int frameDelay; // frame time out in microseconds
 long delayStart; // init variable for turnaround and timeout delay
 
-boolean is_update;
-unsigned int pointer_buffer;
-unsigned int bytesReceived;
-int lrc;
-long t_getPacket;
+boolean is_update;// true if modbus rtu frame is disposed
+unsigned int pointer_buffer;// index to frame buffer serial receiver
+unsigned int bytesReceived;// Number of bytes in Ascci frame
+int lrc;// Longitudinal Redundancy Check
+long t_getPacket;//time in milis when request to slave start
 
 unsigned int total_no_of_packets; 
 Packet* packetArray; // packet starting address
@@ -246,90 +246,40 @@ boolean putchar_in_frame(unsigned char byte_received)
 void end_frame()
 {
     unsigned int contador;
-    /*for(contador=0;contador<pointer_buffer;contador++){
-		Serial.print(frame[contador],16);
-		Serial.write(',');
-	}*/
+    int invertedlrc = 0;
+    
 	lrc=0;
+    //Sum of all byte except LRC
 	for(contador=0;contador<pointer_buffer-2;contador++){
 		lrc += frame[contador];
 	}
-	//Serial.print("\r\n");
-    //lrc -= frame[pointer_buffer-1];
-    //lrc -= frame[pointer_buffer-2];
-    int invertedlrc = 0;
+	
     invertedlrc = frame[pointer_buffer-2] << 8;
     invertedlrc |= frame[pointer_buffer-1];
+    //lrc=0 if all ok.
     lrc += invertedlrc;
     bytesReceived=pointer_buffer;
     if(lrc == 0)
     {
         pointer_buffer -= 2;
         is_update = true;
-        //Serial.println("lrc_Ok");
     }
     else
     {
+       //LRC Checksum error. Wait for next frame
        pointer_buffer = 0;
        is_update = false;
        lrc = 0; 
-       //Serial.println("lrc_nOtK");
     }
-    /*if(lrc == 0)
-    {
-        pointer_buffer -= 2;
-        is_update = true;
-    }
-    else
-    {
-       pointer_buffer = 0;
-       is_update = false;
-       lrc = 0; 
-    }*/
 }
 
-// get the serial data from the buffer
+// get the serial data from buffer
 void waiting_for_reply()
 {
-	
-	/*
-	if ((*ModbusPort).available()) // is there something to check?
-	{
-		unsigned char overflowFlag = 0;
-		buffer = 0;
-		while ((*ModbusPort).available())
-		{
-			// The maximum number of bytes is limited to the serial buffer size 
-      // of BUFFER_SIZE. If more bytes is received than the BUFFER_SIZE the 
-      // overflow flag will be set and the serial buffer will be read until
-      // all the data is cleared from the receive buffer, while the slave is 
-      // still responding.
-			if (overflowFlag) 
-				(*ModbusPort).read();
-			else
-			{
-				if (buffer == BUFFER_SIZE)
-					overflowFlag = 1;
-			
-				frame[buffer] = (*ModbusPort).read();
-				buffer++;
-			}
-			// This is not 100% correct but it will suffice.
-			// worst case scenario is if more than one character time expires
-			// while reading from the buffer then the buffer is most likely empty
-			// If there are more bytes after such a delay it is not supposed to
-			// be received and thus will force a frame_error.
-			delayMicroseconds(T1_5); // inter character time out
-		}
-			
-		// The minimum buffer size from a slave can be an exception response of
-    // 5 bytes. If the buffer was partially filled set a frame_error.
-		// The maximum number of bytes in a modbus packet is 256 bytes.
-		// The serial buffer limits this to 64 bytes.
-	*/
+	// true if modbus rtu frame is disposed
 	if(is_update == true){
 		buffer = pointer_buffer;
-		long t_now = millis();
+		long t_now = millis();//For time after request to slave 
 		
 		if (buffer < 5)
 			processError();       
@@ -342,12 +292,11 @@ void waiting_for_reply()
 		else if (frame[0] != packet->id) // check id returned
 			processError();
 		else
-			//Serial.print("t_Response= ");
 			Serial.print(bytesReceived);
 			Serial.print(" in ");
 			Serial.print(t_now-t_getPacket);
 			Serial.print(" ms; ");
-			Serial.print(float(bytesReceived/(t_now-t_getPacket)));
+			Serial.print(bytesReceived/(t_now-t_getPacket));
 			Serial.println(" ms/car.");
 			processReply();
 	}
@@ -600,62 +549,39 @@ void sendPacket(unsigned char bufferSize)
 
   //Out Init ASCII Modbus Frame :byte|unsigned char
   (*ModbusPort).write(':');
- // Serial.write(':'); 
   for (unsigned char i = 0; i < bufferSize; i++)
   {
-    //(*ModbusPort).write(frame[i]);
     //Two ASCII bytes to One Byte Modbus frame
     lrcCheck += frame[i];
     lowByte = dec_to_ASCII_HEX(frame[i]);
     higByte = dec_to_ASCII_HEX(frame[i] >> 4);
     (*ModbusPort).write(char(higByte));
     (*ModbusPort).write(char(lowByte));
-   // Serial.write(char(higByte));
-   // Serial.write(char(lowByte));
-    
   }
   // Calculate  and send LRC
-  // Serial.print("whitout lrc: ");
-  // Serial.println(lrcCheck);
   lrcCheck = lrcCheck*-1;
-  // Serial.print("whit lrc: ");
-  // Serial.println(lrcCheck);
   lrcByte = lrcCheck >> 8;
   lowByte = dec_to_ASCII_HEX(lrcByte);
   higByte = dec_to_ASCII_HEX(lrcByte >> 4);
   (*ModbusPort).write(char(higByte));
   (*ModbusPort).write(char(lowByte));
-  // Serial.write(char(higByte));
-  // Serial.write(char(lowByte));
   lrcByte = lrcCheck & 0xFF;
   lowByte = dec_to_ASCII_HEX(lrcByte);
   higByte = dec_to_ASCII_HEX(lrcByte >> 4);
   (*ModbusPort).write(char(higByte));
   (*ModbusPort).write(char(lowByte));
-  // Serial.write(char(higByte));
-  // Serial.write(char(lowByte));
   
   (*ModbusPort).write('\r');
   (*ModbusPort).write('\n');
-  // Serial.write('\r');
-  // Serial.write('\n');     
   (*ModbusPort).flush();
-  Serial.flush();  
+  //Serial.flush();  
+    
     // allow a frame delay to indicate end of transmission
     //delayMicroseconds(T3_5); 
     
-  digitalWrite(TxEnablePin, LOW);/*	
-	for (unsigned char i = 0; i < bufferSize; i++)
-		(*ModbusPort).write(frame[i]);
-		
-	(*ModbusPort).flush();
-	
-	delayMicroseconds(frameDelay);
-	
-	digitalWrite(TxEnablePin, LOW);
-	*/	
-	delayStart = millis(); // start the timeout delay	
-	t_getPacket = millis();
+  digitalWrite(TxEnablePin, LOW);
+  delayStart = millis(); // start the timeout delay	
+  t_getPacket = millis();
 }
 
 // Conversion from unsigned char BCD [0,1,2...,16]

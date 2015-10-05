@@ -97,19 +97,13 @@ boolean putchar_in_frame(unsigned char byte_received)
 void end_frame()
 {
     unsigned int contador;
-    
-    /*for(contador=0;contador<pointer_buffer;contador++){
-		Serial.print(frame[contador],16);
-		Serial.write(',');
-	}*/
-	lrc=0;
+    int invertedlrc = 0;
+	
+    lrc=0;
 	for(contador=0;contador<pointer_buffer-2;contador++){
 		lrc += frame[contador];
 	}
-	//Serial.print("\r\n");
-    //lrc -= frame[pointer_buffer-1];
-    //lrc -= frame[pointer_buffer-2];
-    int invertedlrc = 0;
+    
     invertedlrc = frame[pointer_buffer-2] << 8;
     invertedlrc |= frame[pointer_buffer-1];
     lrc += invertedlrc;
@@ -119,20 +113,17 @@ void end_frame()
     {
         pointer_buffer -= 2;
         is_update = true;
-        //Serial.println("lrc_Ok");
     }
     else
     {
        pointer_buffer = 0;
        is_update = false;
        lrc = 0; 
-       //Serial.println("lrc_nOtK");
     }
 }
 
 unsigned int modbus_update()
 {
-  //if ((*ModbusPort).available())
   if(is_update == true)
   {
       long t_now=millis();
@@ -140,32 +131,7 @@ unsigned int modbus_update()
       Serial.print(t_now-t_getPacket);
       Serial.println(" ms.");
       unsigned char buffer = pointer_buffer;
-      /*
-      unsigned char overflow = 0;
-    
-      while ((*ModbusPort).available())
-      {
-          // If more bytes is received than the BUFFER_SIZE the overflow flag will be set and the 
-          // serial buffer will be red untill all the data is cleared from the receive buffer.
-          if (overflow) 
-              (*ModbusPort).read();
-          else
-          {
-              if (buffer == BUFFER_SIZE)
-                  overflow = 1;
-              frame[buffer] = (*ModbusPort).read();
-              buffer++;
-          }
-          delayMicroseconds(T1_5); // inter character time out
-      }
-    
-      // If an overflow occurred increment the errorCount
-      // variable and return to the main sketch without 
-      // responding to the request i.e. force a timeout
-      if (overflow)
-          return errorCount++;
-    */
-    
+
       // The minimum request packet is 8 bytes for function 3 & 16
     if (buffer > 7) 
       {
@@ -179,11 +145,9 @@ unsigned int modbus_update()
       if (id == slaveID || broadcastFlag) // if the recieved ID matches the slaveID or broadcasting id (0), continue
       {
 		  
-		  //Serial.print("It's for me, ");
         unsigned int crc = ((frame[buffer - 2] << 8) | frame[buffer - 1]); // combine the crc Low & High bytes
         if (calculateCRC(buffer - 2) == crc) // if the calculated crc matches the recieved crc continue
         {
-                  //Serial.print("crc is Ok, ");
                   function = frame[1];
                   unsigned int startingAddress = ((frame[2] << 8) | frame[3]); // combine the starting address bytes
                   unsigned int no_of_registers = ((frame[4] << 8) | frame[5]); // combine the number of register bytes  
@@ -292,15 +256,12 @@ unsigned int modbus_update()
         }
               else // checksum failed
                   errorCount++;
-                 // Serial.print("crc isn't Ok,");
       } // incorrect id
       is_update = false;
-      //Serial.print("Isn't for me,");
     }
     else if (buffer > 0 && buffer < 8)
           errorCount++; // corrupted packet
           is_update = false;
-          //Serial.print("less for packet");
           
   }
   return errorCount;
@@ -361,61 +322,35 @@ void sendPacket(unsigned char bufferSize)
 
   //Out Init ASCII Modbus Frame :byte|unsigned char
   (*ModbusPort).write(':');
-  //Serial.write(':'); 
   for (unsigned char i = 0; i < bufferSize; i++)
   {
-    //(*ModbusPort).write(frame[i]);
     //Two ASCII bytes to One Byte Modbus frame
     lrcCheck += frame[i];
     lowByte = dec_to_ASCII_HEX(frame[i]);
     higByte = dec_to_ASCII_HEX(frame[i] >> 4);
     (*ModbusPort).write(char(higByte));
     (*ModbusPort).write(char(lowByte));
-    // Serial.write(char(higByte));
-    // Serial.write(char(lowByte));
     
   }
   // Calculate  and send LRC
-  // Serial.print("whitout lrc: ");
-  // Serial.println(lrcCheck);
   lrcCheck = lrcCheck*-1;
-  // Serial.print("whit lrc: ");
-  // Serial.println(lrcCheck);
   lrcByte = lrcCheck >> 8;
   lowByte = dec_to_ASCII_HEX(lrcByte);
   higByte = dec_to_ASCII_HEX(lrcByte >> 4);
   (*ModbusPort).write(char(higByte));
   (*ModbusPort).write(char(lowByte));
-  // Serial.write(char(higByte));
-  //   Serial.write(char(lowByte));
   lrcByte = lrcCheck & 0xFF;
   lowByte = dec_to_ASCII_HEX(lrcByte);
   higByte = dec_to_ASCII_HEX(lrcByte >> 4);
   (*ModbusPort).write(char(higByte));
   (*ModbusPort).write(char(lowByte));
-  // Serial.write(char(higByte));
-  //   Serial.write(char(lowByte));
   
   (*ModbusPort).write('\r');
   (*ModbusPort).write('\n');
-  // Serial.write('\r');
-  // Serial.write('\n');     
   (*ModbusPort).flush();
   Serial.flush();  
-    // allow a frame delay to indicate end of transmission
-    //delayMicroseconds(T3_5); 
     
-  digitalWrite(TxEnablePin, LOW);/*	
-	for (unsigned char i = 0; i < bufferSize; i++)
-		(*ModbusPort).write(frame[i]);
-		
-	(*ModbusPort).flush();
-	
-	delayMicroseconds(frameDelay);
-	
-	digitalWrite(TxEnablePin, LOW);
-	*/	
-	//delayStart = millis(); // start the timeout delay	
+  digitalWrite(TxEnablePin, LOW);	
 	
 }
 

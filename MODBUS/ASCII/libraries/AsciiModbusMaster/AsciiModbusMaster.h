@@ -1,5 +1,10 @@
 #ifndef ASCII_MODBUS_MASTER_H
 #define ASCII_MODBUS_MASTER_H
+/*
+ * @pepsilla:
+ *  AsciiModBusRTU layer-
+ * 
+ * /
 
 // SimpleModbusMasterV2r2
 
@@ -70,7 +75,12 @@
    slave and since 9 bytes is already used for ID, FUNCTION, ADDRESS, 
    NO OF REGISTERS, NO OF BYTES and two BYTES CRC the master can only write
    54 bytes or 27 registers.
-    
+*
+@pepsilla:
+* In this Ascii Modbus layer, the maximun bytes you can sed an receive are 256 included CRC_CHECK
+* 258 include LRC_CHECK
+*     
+ 
    Note:
    Using a USB to Serial converter the maximum bytes you can send is 
    limited to its internal buffer which differs between manufactures. 
