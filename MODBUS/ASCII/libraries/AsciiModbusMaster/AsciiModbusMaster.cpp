@@ -33,10 +33,12 @@ unsigned int frameDelay; // frame time out in microseconds
 long delayStart; // init variable for turnaround and timeout delay
 
 boolean is_update;// true if modbus rtu frame is disposed
+boolean packet_decoded = false;
 unsigned int pointer_buffer;// index to frame buffer serial receiver
 unsigned int bytesReceived;// Number of bytes in Ascci frame
 int lrc;// Longitudinal Redundancy Check
 long t_getPacket;//time in milis when request to slave start
+boolean _debugMode = false;
 
 unsigned int total_no_of_packets; 
 Packet* packetArray; // packet starting address
@@ -63,7 +65,7 @@ void sendPacket(unsigned char bufferSize);
 unsigned char dec_to_ASCII_HEX(unsigned char decChar);
 
 // Modbus Master State Machine
-void modbus_update() 
+boolean modbus_update() 
 {
 	switch (state)
 	{
@@ -77,6 +79,12 @@ void modbus_update()
 		waiting_for_turnaround();
 		break;
 	}
+	//Serial.print("@");
+	if(packet_decoded){
+		packet_decoded = false;
+		return true;
+	}
+	return false;
 }
 
 void idle()
@@ -273,11 +281,20 @@ void end_frame()
     }
 }
 
+void set_debug(boolean value){
+	_debugMode = value;
+}
+
+boolean get_debug(){
+	return _debugMode;
+}
+
 // get the serial data from buffer
 void waiting_for_reply()
 {
 	// true if modbus rtu frame is disposed
 	if(is_update == true){
+		packet_decoded = true;
 		buffer = pointer_buffer;
 		long t_now = millis();//For time after request to slave 
 		
@@ -292,12 +309,14 @@ void waiting_for_reply()
 		else if (frame[0] != packet->id) // check id returned
 			processError();
 		else
+			/*
 			Serial.print(bytesReceived);
 			Serial.print(" in ");
 			Serial.print(t_now-t_getPacket);
 			Serial.print(" ms; ");
 			Serial.print(bytesReceived/(t_now-t_getPacket));
 			Serial.println(" ms/car.");
+			* */
 			processReply();
 	}
 	else if ((millis() - delayStart) > timeout) // check timeout
@@ -549,6 +568,7 @@ void sendPacket(unsigned char bufferSize)
 
   //Out Init ASCII Modbus Frame :byte|unsigned char
   (*ModbusPort).write(':');
+  if(_debugMode)Serial.write('>');
   for (unsigned char i = 0; i < bufferSize; i++)
   {
     //Two ASCII bytes to One Byte Modbus frame
@@ -556,7 +576,9 @@ void sendPacket(unsigned char bufferSize)
     lowByte = dec_to_ASCII_HEX(frame[i]);
     higByte = dec_to_ASCII_HEX(frame[i] >> 4);
     (*ModbusPort).write(char(higByte));
+    if(_debugMode)Serial.write(char(higByte));
     (*ModbusPort).write(char(lowByte));
+    if(_debugMode)Serial.write(char(lowByte));
   }
   // Calculate  and send LRC
   lrcCheck = lrcCheck*-1;
@@ -564,17 +586,23 @@ void sendPacket(unsigned char bufferSize)
   lowByte = dec_to_ASCII_HEX(lrcByte);
   higByte = dec_to_ASCII_HEX(lrcByte >> 4);
   (*ModbusPort).write(char(higByte));
+  if(_debugMode)Serial.write(char(higByte));
   (*ModbusPort).write(char(lowByte));
+  if(_debugMode)Serial.write(char(lowByte));
   lrcByte = lrcCheck & 0xFF;
   lowByte = dec_to_ASCII_HEX(lrcByte);
   higByte = dec_to_ASCII_HEX(lrcByte >> 4);
   (*ModbusPort).write(char(higByte));
+  if(_debugMode)Serial.write(char(higByte));
   (*ModbusPort).write(char(lowByte));
+  if(_debugMode)Serial.write(char(lowByte));
   
   (*ModbusPort).write('\r');
+  if(_debugMode)Serial.write('\r');
   (*ModbusPort).write('\n');
+  if(_debugMode)Serial.write('\n');
   (*ModbusPort).flush();
-  //Serial.flush();  
+  Serial.flush();  
     
     // allow a frame delay to indicate end of transmission
     //delayMicroseconds(T3_5); 
@@ -599,4 +627,23 @@ unsigned char dec_to_ASCII_HEX(unsigned char decChar){
 		decChar += 55;
 	}
 	return decChar;
+}
+
+long get_timeout(){
+	return timeout;
+}
+long get_polling(){
+	return polling;
+}
+unsigned char get_retry_count(){
+	return retry_count;
+}
+void set_timeout(long value){
+	timeout = value;
+}
+void set_polling(long value){
+	polling = value;
+}
+void set_retry_count(unsigned char value){
+	retry_count = value;
 }
