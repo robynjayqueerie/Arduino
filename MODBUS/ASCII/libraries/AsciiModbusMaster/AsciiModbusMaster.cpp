@@ -44,6 +44,7 @@ unsigned int total_no_of_packets;
 Packet* packetArray; // packet starting address
 Packet* packet; // current packet
 unsigned int* register_array; // pointer to masters register array
+unsigned int* register_change_flags; // pointer to change flags register array
 HardwareSerial* ModbusPort;
 
 // function definitions
@@ -411,15 +412,43 @@ void process_F1_F2()
 void process_F3_F4()
 {
 	// check number of bytes returned - unsigned int == 2 bytes
-  // data for function 3 & 4 is the number of registers
+  // data for function 3 & 4 is the number of 
+  //@pepsilla:
+  //unsigned char no_of_change_flags = sizeof (register_change_flags);
+  unsigned char i;
+  //Reset register_change_flags array to check old_value and new_value
+  //for (i=0;i<no_of_change_flags)register_change_flags[i]=0;
+  packet->change_flags = false; //Reset changes in packet from slave; 
+  
   if (frame[2] == (packet->data * 2)) 
   {
     unsigned char index = 3;
-    for (unsigned char i = 0; i < packet->data; i++)
+    unsigned int new_value;
+    unsigned int old_value;
+    unsigned char register_flag;
+    unsigned int local_addres;
+    unsigned char register_bit;
+    unsigned char value;
+    
+    for (i = 0; i < packet->data; i++)
     {
       // start at the 4th element in the frame and combine the Lo byte 
-      register_array[packet->local_start_address + i] = (frame[index] << 8) | frame[index + 1]; 
-      index += 2;
+      old_value = register_array[packet->local_start_address + i];
+      new_value = (frame[index] << 8) | frame[index + 1];
+      if(old_value != new_value){
+		local_addres = packet->local_start_address + i;
+		register_array[local_addres] = new_value;
+		//Set change_flag_matrix:
+		packet->change_flags = true; //Changes in packet
+		//register_flag is an array of unsigned char (one memory position of arduino RAM),
+		//Each bite of change_flags represent a change in register_array from 0 to sizeof(register_array) 
+		register_flag = local_addres/16;
+		register_bit = local_addres % 16;
+		value = 1;
+		value <<= (15-register_bit);
+		register_change_flags[register_flag] |= value;
+	  }
+	  index += 2;
     }
     processSuccess(); 
   }
@@ -473,7 +502,8 @@ void modbus_configure(HardwareSerial* SerialPort,
 											unsigned char _TxEnablePin, 
 											Packet* _packets, 
 											unsigned int _total_no_of_packets,
-											unsigned int* _register_array)
+											unsigned int* _register_array,
+											unsigned int* _register_change_flags)
 { 
 	// Modbus states that a baud rate higher than 19200 must use a fixed 750 us 
   // for inter character time out and 1.75 ms for a frame delay for baud rates
@@ -502,14 +532,14 @@ void modbus_configure(HardwareSerial* SerialPort,
 	
 	// initialize
 	state = IDLE;
-  timeout = _timeout;
-  polling = _polling;
+    timeout = _timeout;
+    polling = _polling;
 	retry_count = _retry_count;
 	TxEnablePin = _TxEnablePin;
 	total_no_of_packets = _total_no_of_packets;
 	packetArray = _packets;
 	register_array = _register_array;
-	
+	register_change_flags =_register_change_flags;
 	ModbusPort = SerialPort;
 	(*ModbusPort).begin(baud, byteFormat);
 	

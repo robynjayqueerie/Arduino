@@ -23,8 +23,8 @@
 //////////////////// Port information ///////////////////
 #define baud 38400
 #define t_timeout 500
-#define t_polling 0 // the scan rate
-#define t_retry_count 2400
+#define t_polling 200 // the scan rate
+#define t_retry_count 240
 
 #define timeout 500
 #define polling 0
@@ -38,6 +38,7 @@
 
 // The total amount of available memory on the master to store data
 #define TOTAL_NO_OF_REGISTERS 240
+#define TOTAL_NO_OF_REGISTERS_CHANGE_FLAGS (TOTAL_NO_OF_REGISTERS/16)+1
 
 // This is the easiest way to create new packets
 // Add as many as you want. TOTAL_NO_OF_PACKETS
@@ -58,8 +59,12 @@ Packet packets[TOTAL_NO_OF_PACKETS+1];
 
 // Masters register array
 unsigned int regs[TOTAL_NO_OF_REGISTERS];
+//
+unsigned int change_flags[TOTAL_NO_OF_REGISTERS_CHANGE_FLAGS];
 
 SerialCommand _myMonitor;
+
+boolean _autoChangeFlags = false; //Turn on/off change notifications
 
 void setup()
 {
@@ -69,51 +74,60 @@ void setup()
   modbus_construct(&packets[PACKET3], 52, READ_HOLDING_REGISTERS, 0, 54, 38);
   //modbus_construct(&packets[PACKET4], 11, READ_HOLDING_REGISTERS, 0, 9, 10);
   // Initialize the Modbus Finite State Machine
-  modbus_configure(&Serial2, baud, SERIAL_8N2, timeout, polling, retry_count, TxEnablePin, packets, TOTAL_NO_OF_PACKETS, regs);
+  modbus_configure(&Serial2, baud, SERIAL_8N2, timeout, polling, retry_count, TxEnablePin, packets, TOTAL_NO_OF_PACKETS, regs, change_flags);
   
   pinMode(LED, OUTPUT);
   Serial.begin(115200);
   //Set communication command/response for USB Serial port
   _myMonitor.addCommand("R",getREGISTERS); // Print modbus registers
   _myMonitor.addCommand("G",getStatus); // Print debug registers
-  _myMonitor.addCommand("to",setTimeOut); // Turn on/off relay LAMP1
-  _myMonitor.addCommand("po",setPolling); // Turn on/off relay LAMP2
-  _myMonitor.addCommand("re",setRetries); // Turn on/off relay EXTRACTOR
-  _myMonitor.addCommand("degubSerial",setDebug); // Turn on/off relay 220Vac Auxiliar pump
-  //_myMonitor.addCommand("date",setFecha); // Set date from string ("YYYY/MM/DD")
-  //_myMonitor.addCommand("time",setTiempo); // Set time form string ("HH:MM:SS")
-  _myMonitor.addDefaultHandler(miMonitor);
+  _myMonitor.addCommand("to",setTimeOut); // Set/Get Time out of slave response
+  _myMonitor.addCommand("po",setPolling); // Set/Get Time polling of Modbus serial
+  _myMonitor.addCommand("re",setRetries); // Set/Get number of retry for timeouts
+  _myMonitor.addCommand("degubSerial",setDebug); // Set/Get debug info to Serial port
+  _myMonitor.addCommand("cf" ,changeFlags); //Set/Get serial.print changes notifications.
+  
+  //_myMonitor.addCommand("date",setFecha); // Set date from string ("YYYY/MM/DD") and broadcast to ModBus
+  //_myMonitor.addCommand("time",setTiempo); // Set time form string ("HH:MM:SS") and broadcast to ModBus
+  
+  _myMonitor.addDefaultHandler(miMonitor);//Default handler ex:for decive information
   
 }
 
 void loop()
 {
   boolean my;
+  
   my=modbus_update();
   _myMonitor.readSerial();
-  if(my){
+  
+  //Evaluate changes when packet decoded
+  if(my && _autoChangeFlags){
+    unsigned char counterPacket;
+    for(counterPacket=0; counterPacket<TOTAL_NO_OF_PACKETS;counterPacket++){
+      if(packets[counterPacket].change_flags)
+      {
+        /*
+        modbus_construct(&packets[PACKET1], 10, READ_HOLDING_REGISTERS, 0,27 , 0);
+        modbus_construct(&packets[PACKET2], 11, READ_HOLDING_REGISTERS, 0, 9, 28);
+        modbus_construct(&packets[PACKET3], 52, READ_HOLDING_REGISTERS, 0, 54, 38);
+        */
+        switch(counterPacket){
+          case 0: printRegFlags(0,27);
+                  break;
+          case 1: printRegFlags(28,9);
+                  break;
+          case 2: printRegFlags(38,54);
+                  break;
+          default: Serial.println("[Check counterPacket switch],WARNING");
+        }
+        packets[counterPacket].change_flags = false;
+      }
+    }
   }
 
 
-  unsigned int retries;
-  regs[110] = analogRead(0); // update data to be written to arduino slave
-  /*
-  regs[1] = analogRead(1); // update data to be written to arduino slave
-  regs[2] = analogRead(2); // update data to be written to arduino slave
-  regs[3] = analogRead(3); // update data to be written to arduino slave
-  regs[4] = analogRead(4); // update data to be written to arduino slave
-  regs[5] = analogRead(5); // update data to be written to arduino slave
-  regs[6] = analogRead(6); // update data to be written to arduino slave
-  regs[7] = analogRead(7); // update data to be written to arduino slave
-  regs[8] = analogRead(8); // update data to be written to arduino slave
-  regs[9] = analogRead(9); // update data to be written to arduino slave
-  regs[10] = analogRead(10); // update data to be written to arduino slave
-  regs[11] = analogRead(11); // update data to be written to arduino slave
-  regs[12] = analogRead(12); // update data to be written to arduino slave
-  regs[13] = analogRead(13); // update data to be written to arduino slave
-  regs[14] = analogRead(14); // update data to be written to arduino slave
-  regs[15] = analogRead(15); // update data to be written to arduino slave
-  */
-  analogWrite(LED, regs[0]>>2); // constrain adc value from the arduino slave to 255
+  
 }
+
 
