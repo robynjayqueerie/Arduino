@@ -127,12 +127,14 @@ typedef struct
   unsigned int retries;
   	
   // connection status of packet
-  unsigned char connection; 
+  unsigned char connection;
+  //If changes success form register map of slave. 
+  boolean change_flags;
   
 }Packet;
 
 // function definitions
-void modbus_update();
+boolean modbus_update();
 
 void modbus_construct(Packet *_packet, 
 											unsigned char id, 
@@ -150,8 +152,18 @@ void modbus_configure(HardwareSerial* SerialPort,
 											unsigned char _TxEnablePin,
 											Packet* _packets, 
 											unsigned int _total_no_of_packets,
-											unsigned int* _register_array);
+											unsigned int* _register_array,
+											unsigned int* _register_change_flags);
+											
 boolean putchar_in_frame(unsigned char byte_received);
 void init_frame();
 void end_frame();
+void set_debug(boolean value);
+boolean get_debug();
+long get_timeout();
+long get_polling();
+unsigned char get_retry_count();
+void set_timeout(long value);
+void set_polling(long value);
+void set_retry_count(unsigned char value);
 #endif

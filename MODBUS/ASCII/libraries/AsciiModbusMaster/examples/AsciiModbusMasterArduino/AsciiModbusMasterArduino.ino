@@ -22,8 +22,8 @@
 //////////////////// Port information ///////////////////
 #define baud 38400
 #define timeout 1000
-#define polling 0 // the scan rate
-#define retry_count 4
+#define polling 125 // the scan rate
+#define retry_count 24
 
 // used to toggle the receive/transmit pin on the driver
 #define TxEnablePin 2 
@@ -40,6 +40,7 @@ enum
 {
   PACKET1,
   PACKET2,
+  PACKET3,
   TOTAL_NO_OF_PACKETS // leave this last entry
 };
 
@@ -52,9 +53,9 @@ unsigned int regs[TOTAL_NO_OF_REGISTERS];
 void setup()
 {
   // Initialize each packet
-  modbus_construct(&packets[PACKET1], 1, READ_HOLDING_REGISTERS, 0,TOTAL_NO_OF_REGISTERS , 0);
-  modbus_construct(&packets[PACKET2], 1, PRESET_MULTIPLE_REGISTERS, 0, TOTAL_NO_OF_REGISTERS, 0);
-  
+  modbus_construct(&packets[PACKET1], 10, READ_HOLDING_REGISTERS, 0,9 , 0);
+  modbus_construct(&packets[PACKET2], 11, READ_HOLDING_REGISTERS, 0, 9, 10);
+  modbus_construct(&packets[PACKET2], 52, READ_HOLDING_REGISTERS, 0, 54, 19);
   // Initialize the Modbus Finite State Machine
   modbus_configure(&Serial2, baud, SERIAL_8N2, timeout, polling, retry_count, TxEnablePin, packets, TOTAL_NO_OF_PACKETS, regs);
   

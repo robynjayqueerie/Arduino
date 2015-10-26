@@ -7,7 +7,7 @@ void serialEvent2()
 {
   while(Serial2.available()){
   unsigned char receivedChar=Serial2.read();
-  //Serial.write(receivedChar);
+  Serial.write(receivedChar);
   //Serial.write('=');
   if(frameInit)
   {
